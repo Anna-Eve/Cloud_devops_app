@@ -1,387 +1,3 @@
-// // // pipeline {
-// // //     agent any
-// // //     environment {
-// // //         APP_NAME    = "flask-api"
-// // //         APP_IMAGE   = "${APP_NAME}:${BUILD_NUMBER}"
-// // //         KAFKA_TOPIC = "ci-events"
-// // //         // KAFKA_BROKER est défini dans les variables d'environnement Jenkins
-// // //         // ou en dur ici pour les tests locaux
-// // //         KAFKA_BROKER = "${env.KAFKA_BROKER ?: 'kafka:9092'}"
-// // //     }
-
-// // //     stages {
-// // //         // STAGE 1 : BUILD
-// // //         stage('Build') {
-// // //             steps {
-// // //                 echo "=== BUILD : construction de l'image Docker ==="
-// // //                 sh "docker build -t ${APP_IMAGE} ./app"
-// // //             }
-// // //             post {
-// // //                 success {
-// // //                     script { sendKafkaEvent("BUILD", "SUCCESS") }
-// // //                 }
-// // //                 failure {
-// // //                     script { sendKafkaEvent("BUILD", "FAILURE") }
-// // //                 }
-// // //             }
-// // //         }
-// // //         // STAGE 2 : TEST
-// // //         stage('Test') {
-// // //             steps {
-// // //                 echo "TEST : exécution des tests automatiques"
-// // //                 // Lance les tests dans un conteneur éphémère basé sur l'image construite
-// // //                 sh """
-// // //                     docker run --rm \
-// // //                         --name ${APP_NAME}-test-${BUILD_NUMBER} \
-// // //                         ${APP_IMAGE} \
-// // //                         python -m pytest app/tests/ -v --tb=short
-// // //                 """
-// // //             }
-// // //             post {
-// // //                 always {
-// // //                     // Archive les résultats si pytest-junit est utilisé
-// // //                     junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
-// // //                 }
-// // //                 success {
-// // //                     script { sendKafkaEvent("TEST", "SUCCESS") }
-// // //                 }
-// // //                 failure {
-// // //                     script { sendKafkaEvent("TEST", "FAILURE") }
-// // //                 }
-// // //             }
-// // //         }
-// // //         // STAGE 3 : DEPLOY
-// // //         stage('Deploy') {
-// // //             steps {
-// // //                 echo "DEPLOY : redémarrage du service via docker-compose"
-// // //                 sh """
-// // //                     # Arrête l'ancien conteneur de l'app s'il tourne
-// // //                     docker stop ${APP_NAME} 2>/dev/null || true
-// // //                     docker rm   ${APP_NAME} 2>/dev/null || true
-
-// // //                     # Relance avec la nouvelle image
-// // //                     docker run -d \
-// // //                         --name ${APP_NAME} \
-// // //                         --network devops-net \
-// // //                         -e KAFKA_BROKER=${KAFKA_BROKER} \
-// // //                         -p 5000:5000 \
-// // //                         ${APP_IMAGE}
-// // //                 """
-// // //             }
-// // //             post {
-// // //                 success {
-// // //                     script { sendKafkaEvent("DEPLOY", "SUCCESS") }
-// // //                 }
-// // //                 failure {
-// // //                     script { sendKafkaEvent("DEPLOY", "FAILURE") }
-// // //                 }
-// // //             }
-// // //         }
-// // //     }
-// // //     // POST GLOBAL
-// // //     post {
-// // //         success {
-// // //             echo "Pipeline terminé avec succès — build #${BUILD_NUMBER}"
-// // //         }
-// // //         failure {
-// // //             echo "Pipeline échoué — voir les logs ci-dessus"
-// // //         }
-// // //         always {
-// // //             // Nettoyage des images intermédiaires pour économiser de l'espace
-// // //             sh "docker image prune -f"
-// // //         }
-// // //     }
-// // // }
-
-// // // // FONCTION UTILITAIRE : envoi événement Kafka
-// // // def sendKafkaEvent(String stage, String status) {
-// // //     def payload = """
-// // //         {
-// // //             "build_number": "${env.BUILD_NUMBER}",
-// // //             "job_name":     "${env.JOB_NAME}",
-// // //             "stage":        "${stage}",
-// // //             "status":       "${status}",
-// // //             "timestamp":    "${new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))}"
-// // //         }
-// // //     """.trim().replaceAll(/\s+/, ' ')
-
-// // //     echo "→ Envoi Kafka [${stage}] ${status}"
-
-// // //     // kafka-console-producer est disponible dans l'image Jenkins custom (voir Dockerfile)
-// // //     sh """
-// // //         echo '${payload}' | kafka-console-producer.sh \
-// // //             --broker-list ${env.KAFKA_BROKER} \
-// // //             --topic ${env.KAFKA_TOPIC} \
-// // //         || echo 'WARN: Kafka non disponible, événement ignoré'
-// // //     """
-// // // }
-
-// // pipeline {
-// //     agent any
-
-// //     environment {
-// //         APP_NAME    = "flask-api"
-// //         APP_IMAGE   = "${APP_NAME}:${BUILD_NUMBER}"
-// //         KAFKA_TOPIC = "ci-events"
-// //         // KAFKA_BROKER est défini dans les variables d'environnement Jenkins
-// //         // ou en dur ici pour les tests locaux
-// //         KAFKA_BROKER = "${env.KAFKA_BROKER ?: 'kafka:9092'}"
-// //     }
-
-// //     stages {
-
-// //         // ─────────────────────────────────────────
-// //         // STAGE 1 — BUILD
-// //         // ─────────────────────────────────────────
-// //         stage('Build') {
-// //             steps {
-// //                 echo "=== BUILD : construction de l'image Docker ==="
-// //                 sh "docker build -t ${APP_IMAGE} ./app"
-// //             }
-// //             post {
-// //                 success {
-// //                     script { sendKafkaEvent("BUILD", "SUCCESS") }
-// //                 }
-// //                 failure {
-// //                     script { sendKafkaEvent("BUILD", "FAILURE") }
-// //                 }
-// //             }
-// //         }
-
-// //         // ─────────────────────────────────────────
-// //         // STAGE 2 — TEST
-// //         // ─────────────────────────────────────────
-// //         stage('Test') {
-// //             steps {
-// //                 echo "=== TEST : exécution des tests automatiques ==="
-// //                 // Lance les tests dans un conteneur éphémère basé sur l'image construite
-// //                 sh """
-// //                     docker run --rm \
-// //                         --name ${APP_NAME}-test-${BUILD_NUMBER} \
-// //                         ${APP_IMAGE} \
-// //                         python -m pytest tests/ -v --tb=short
-// //                 """
-// //             }
-// //             post {
-// //                 always {
-// //                     // Archive les résultats si pytest-junit est utilisé
-// //                     junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
-// //                 }
-// //                 success {
-// //                     script { sendKafkaEvent("TEST", "SUCCESS") }
-// //                 }
-// //                 failure {
-// //                     script { sendKafkaEvent("TEST", "FAILURE") }
-// //                 }
-// //             }
-// //         }
-
-// //         // ─────────────────────────────────────────
-// //         // STAGE 3 — DEPLOY
-// //         // ─────────────────────────────────────────
-// //         stage('Deploy') {
-// //             steps {
-// //                 echo "=== DEPLOY : redémarrage du service via docker-compose ==="
-// //                 sh """
-// //                     # Arrête l'ancien conteneur de l'app s'il tourne
-// //                     docker stop ${APP_NAME} 2>/dev/null || true
-// //                     docker rm   ${APP_NAME} 2>/dev/null || true
-
-// //                     # Relance avec la nouvelle image
-// //                     docker run -d \
-// //                         --name ${APP_NAME} \
-// //                         --network devops-net \
-// //                         -e KAFKA_BROKER=${KAFKA_BROKER} \
-// //                         -p 5000:5000 \
-// //                         ${APP_IMAGE}
-// //                 """
-// //             }
-// //             post {
-// //                 success {
-// //                     script { sendKafkaEvent("DEPLOY", "SUCCESS") }
-// //                 }
-// //                 failure {
-// //                     script { sendKafkaEvent("DEPLOY", "FAILURE") }
-// //                 }
-// //             }
-// //         }
-// //     }
-
-// //     // ─────────────────────────────────────────
-// //     // POST GLOBAL
-// //     // ─────────────────────────────────────────
-// //     post {
-// //         success {
-// //             echo "Pipeline terminé avec succès — build #${BUILD_NUMBER}"
-// //         }
-// //         failure {
-// //             echo "Pipeline échoué — voir les logs ci-dessus"
-// //         }
-// //         always {
-// //             // Nettoyage des images intermédiaires pour économiser de l'espace
-// //             sh "docker image prune -f"
-// //         }
-// //     }
-// // }
-
-// // // ─────────────────────────────────────────
-// // // FONCTION UTILITAIRE — envoi événement Kafka
-// // // ─────────────────────────────────────────
-// // def sendKafkaEvent(String stage, String status) {
-// //     def payload = """
-// //         {
-// //             "build_number": "${env.BUILD_NUMBER}",
-// //             "job_name":     "${env.JOB_NAME}",
-// //             "stage":        "${stage}",
-// //             "status":       "${status}",
-// //             "timestamp":    "${new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))}"
-// //         }
-// //     """.trim().replaceAll(/\s+/, ' ')
-
-// //     echo "→ Envoi Kafka [${stage}] ${status}"
-
-// //     // kafka-console-producer est disponible dans l'image Jenkins custom (voir Dockerfile)
-// //     sh """
-// //         echo '${payload}' | kafka-console-producer.sh \
-// //             --broker-list ${env.KAFKA_BROKER} \
-// //             --topic ${env.KAFKA_TOPIC} \
-// //         || echo 'WARN: Kafka non disponible, événement ignoré'
-// //     """
-// // }
-
-// pipeline {
-//     agent any
-
-//     environment {
-//         APP_NAME    = "flask-api"
-//         APP_IMAGE   = "${APP_NAME}:${BUILD_NUMBER}"
-//         KAFKA_TOPIC = "ci-events"
-//         // KAFKA_BROKER est défini dans les variables d'environnement Jenkins
-//         // ou en dur ici pour les tests locaux
-//         KAFKA_BROKER = "${env.KAFKA_BROKER ?: 'kafka:9092'}"
-//     }
-
-//     stages {
-
-//         // ─────────────────────────────────────────
-//         // STAGE 1 — BUILD
-//         // ─────────────────────────────────────────
-//         stage('Build') {
-//             steps {
-//                 echo "=== BUILD : construction de l'image Docker ==="
-//                 sh "docker build -t ${APP_IMAGE} ./app"
-//             }
-//             post {
-//                 success {
-//                     script { sendKafkaEvent("BUILD", "SUCCESS") }
-//                 }
-//                 failure {
-//                     script { sendKafkaEvent("BUILD", "FAILURE") }
-//                 }
-//             }
-//         }
-
-//         // ─────────────────────────────────────────
-//         // STAGE 2 — TEST
-//         // ─────────────────────────────────────────
-//         stage('Test') {
-//             steps {
-//                 echo "=== TEST : exécution des tests automatiques ==="
-//                 // Lance les tests dans un conteneur éphémère basé sur l'image construite
-//                 sh """
-//                     docker run --rm \
-//                         --name ${APP_NAME}-test-${BUILD_NUMBER} \
-//                         ${APP_IMAGE} \
-//                         python -m pytest tests/ -v --tb=short
-//                 """
-//             }
-//             post {
-//                 always {
-//                     // Archive les résultats si pytest-junit est utilisé
-//                     junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
-//                 }
-//                 success {
-//                     script { sendKafkaEvent("TEST", "SUCCESS") }
-//                 }
-//                 failure {
-//                     script { sendKafkaEvent("TEST", "FAILURE") }
-//                 }
-//             }
-//         }
-
-//         // ─────────────────────────────────────────
-//         // STAGE 3 — DEPLOY
-//         // ─────────────────────────────────────────
-//         stage('Deploy') {
-//             steps {
-//                 echo "=== DEPLOY : redémarrage du service via docker-compose ==="
-//                 sh """
-//                     # Arrête l'ancien conteneur de l'app s'il tourne
-//                     docker stop ${APP_NAME} 2>/dev/null || true
-//                     docker rm   ${APP_NAME} 2>/dev/null || true
-
-//                     # Relance avec la nouvelle image
-//                     docker run -d \
-//                         --name ${APP_NAME} \
-//                         --network cloud_devops_app_devops-net \
-//                         -e KAFKA_BROKER=${KAFKA_BROKER} \
-//                         -p 5000:5000 \
-//                         ${APP_IMAGE}
-//                 """
-//             }
-//             post {
-//                 success {
-//                     script { sendKafkaEvent("DEPLOY", "SUCCESS") }
-//                 }
-//                 failure {
-//                     script { sendKafkaEvent("DEPLOY", "FAILURE") }
-//                 }
-//             }
-//         }
-//     }
-
-//     // ─────────────────────────────────────────
-//     // POST GLOBAL
-//     // ─────────────────────────────────────────
-//     post {
-//         success {
-//             echo "Pipeline terminé avec succès — build #${BUILD_NUMBER}"
-//         }
-//         failure {
-//             echo "Pipeline échoué — voir les logs ci-dessus"
-//         }
-//         always {
-//             // Nettoyage des images intermédiaires pour économiser de l'espace
-//             sh "docker image prune -f"
-//         }
-//     }
-// }
-
-// // ─────────────────────────────────────────
-// // FONCTION UTILITAIRE — envoi événement Kafka
-// // ─────────────────────────────────────────
-// def sendKafkaEvent(String stage, String status) {
-//     def payload = """
-//         {
-//             "build_number": "${env.BUILD_NUMBER}",
-//             "job_name":     "${env.JOB_NAME}",
-//             "stage":        "${stage}",
-//             "status":       "${status}",
-//             "timestamp":    "${new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))}"
-//         }
-//     """.trim().replaceAll(/\s+/, ' ')
-
-//     echo "→ Envoi Kafka [${stage}] ${status}"
-
-//     // kafka-console-producer est disponible dans l'image Jenkins custom (voir Dockerfile)
-//     sh """
-//         echo '${payload}' | kafka-console-producer.sh \
-//             --broker-list ${env.KAFKA_BROKER} \
-//             --topic ${env.KAFKA_TOPIC} \
-//         || echo 'WARN: Kafka non disponible, événement ignoré'
-//     """
-// }
-
 pipeline {
     agent any
 
@@ -389,8 +5,7 @@ pipeline {
         APP_NAME    = "flask-api"
         APP_IMAGE   = "${APP_NAME}:${BUILD_NUMBER}"
         KAFKA_TOPIC = "ci-events"
-        // KAFKA_BROKER est défini dans les variables d'environnement Jenkins
-        // ou en dur ici pour les tests locaux
+        // KAFKA_BROKER défini via Jenkins ou par défaut pour le réseau interne
         KAFKA_BROKER = "${env.KAFKA_BROKER ?: 'kafka:9092'}"
     }
 
@@ -420,18 +35,22 @@ pipeline {
         stage('Test') {
             steps {
                 echo "=== TEST : exécution des tests automatiques ==="
-                // Lance les tests dans un conteneur éphémère basé sur l'image construite
                 sh """
+                    # Crée le dossier d'accueil sur l'hôte Jenkins
+                    mkdir -p test-results
+                    
+                    # Lance le conteneur en lui montant ce dossier et en demandant un fichier XML
                     docker run --rm \
                         --name ${APP_NAME}-test-${BUILD_NUMBER} \
+                        -v "${WORKSPACE}/test-results:/app/test-results" \
                         ${APP_IMAGE} \
-                        python -m pytest tests/ -v --tb=short
+                        python -m pytest tests/ -v --tb=short --junitxml=test-results/results.xml
                 """
             }
             post {
                 always {
-                    // Archive les résultats si pytest-junit est utilisé
-                    junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
+                    // Jenkins va maintenant pouvoir lire le fichier extrait sur l'hôte
+                    junit allowEmptyResults: true, testResults: 'test-results/results.xml'
                 }
                 success {
                     script { sendKafkaEvent("TEST", "SUCCESS") }
@@ -453,11 +72,12 @@ pipeline {
                     docker stop ${APP_NAME} 2>/dev/null || true
                     docker rm   ${APP_NAME} 2>/dev/null || true
 
-                    # Relance avec la nouvelle image
+                    # Relance avec la nouvelle image en publiant le port 5000
                     docker run -d \
                         --name ${APP_NAME} \
                         --network cloud_devops_app_devops-net \
                         -e KAFKA_BROKER=${KAFKA_BROKER} \
+                        -p 5000:5000 \
                         ${APP_IMAGE}
                 """
             }
@@ -505,9 +125,9 @@ def sendKafkaEvent(String stage, String status) {
 
     echo "→ Envoi Kafka [${stage}] ${status}"
 
-    // kafka-console-producer est disponible dans l'image Jenkins custom (voir Dockerfile)
+    // Utilisation obligatoire du chemin absolu vers le script binaire original de Kafka
     sh """
-        echo '${payload}' | kafka-console-producer.sh \
+        echo '${payload}' | /opt/kafka/bin/kafka-console-producer.sh \
             --broker-list ${env.KAFKA_BROKER} \
             --topic ${env.KAFKA_TOPIC} \
         || echo 'WARN: Kafka non disponible, événement ignoré'

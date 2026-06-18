@@ -79,7 +79,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(flask_http_request_total{status=~\"4..|5..\"}[1m]))",
+          "expr": "sum(rate(app_requests_total{status_code!~\"2..\"}[1m]))",
           "legendFormat": "Erreurs HTTP",
           "refId": "A"
         }
@@ -101,8 +101,8 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(flask_http_request_total[1m])) by (status)",
-          "legendFormat": "HTTP {{status}}",
+          "expr": "sum(rate(app_requests_total[1m]))",
+          "legendFormat": "Toutes les requêtes",
           "refId": "A"
         }
       ]

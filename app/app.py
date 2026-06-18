@@ -1,4 +1,4 @@
-#API Flask avec les 3 routes
+# API Flask avec les 3 routes et tracking automatique des erreurs HTTP
 
 from flask import Flask, request, jsonify
 from kafka import KafkaProducer
@@ -17,7 +17,8 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
 KAFKA_TOPIC  = os.getenv("KAFKA_TOPIC",  "app-events")
 
 # ─── Métriques Prometheus ─────────────────────────────────────────────────────
-REQUEST_COUNT   = Counter("app_requests_total",   "Nombre total de requêtes", ["method", "endpoint"])
+# AJOUT du label "status_code" pour trier les succès et les erreurs dans Grafana
+REQUEST_COUNT   = Counter("app_requests_total", "Nombre total de requêtes", ["method", "endpoint", "status_code"])
 REQUEST_LATENCY = Histogram("app_request_latency_seconds", "Latence des requêtes")
 EVENT_COUNT     = Counter("app_events_total", "Nombre d'événements envoyés à Kafka")
 
@@ -32,12 +33,24 @@ def get_producer():
         logger.warning(f"Kafka non disponible : {e}")
         return None
 
+# ─── Intercepteur de Métriques (Middleware) ───────────────────────────────────
+@app.after_request
+def log_request_metrics(response):
+    """Enregistre automatiquement TOUTES les requêtes et leur code HTTP (200, 404, 405...)."""
+    # Évite de polluer les métriques avec les propres grattages de Prometheus
+    if request.path != "/metrics":
+        REQUEST_COUNT.labels(
+            method=request.method, 
+            endpoint=request.path, 
+            status_code=str(response.status_code)
+        ).inc()
+    return response
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
     """Route principale — vérifie que l'app tourne."""
-    REQUEST_COUNT.labels(method="GET", endpoint="/").inc()
     return jsonify({
         "status":  "ok",
         "message": "Plateforme DevOps — Application Flask opérationnelle",
@@ -48,7 +61,6 @@ def index():
 @app.route("/health")
 def health():
     """Route de santé — utilisée par Jenkins et Prometheus."""
-    REQUEST_COUNT.labels(method="GET", endpoint="/health").inc()
     return jsonify({
         "status":    "healthy",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -59,8 +71,8 @@ def health():
 def send_event():
     """Reçoit un événement JSON et l'envoie dans Kafka."""
     start = time.time()
-    REQUEST_COUNT.labels(method="POST", endpoint="/event").inc()
 
+    # Flask lève une erreur 415 automatique si ce n'est pas du JSON, l'intercepteur la verra
     data = request.get_json()
     if not data:
         return jsonify({"error": "Corps JSON requis"}), 400

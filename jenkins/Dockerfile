@@ -34,8 +34,6 @@ RUN curl -fsSL https://download.docker.com/linux/debian/gpg \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. Kafka CLI tools
-# On télécharge la distribution binaire Kafka pour avoir
-# kafka-console-producer.sh disponible dans le PATH
 ENV KAFKA_VERSION=3.9.2
 ENV SCALA_VERSION=2.13
 
@@ -46,9 +44,8 @@ RUN curl -fsSL \
     && mv /opt/kafka_${SCALA_VERSION}-${KAFKA_VERSION} /opt/kafka \
     && rm /tmp/kafka.tgz
 
-# Raccourci : kafka-console-producer.sh accessible sans chemin absolu
-RUN ln -s /opt/kafka/bin/kafka-console-producer.sh /usr/local/bin/kafka-console-producer.sh \
-    && ln -s /opt/kafka/bin/kafka-console-consumer.sh /usr/local/bin/kafka-console-consumer.sh
+# À LA PLACE DES LIENS SYMBOLIQUES : Ajoutez le dossier bin au PATH
+ENV PATH="/opt/kafka/bin:${PATH}"
 
 # 4. Plugins Jenkins (installés au build, pas au runtime)
 # Utilise jenkins-plugin-cli fourni dans l'image de base
