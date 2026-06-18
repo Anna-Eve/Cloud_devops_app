@@ -458,7 +458,6 @@ pipeline {
                         --name ${APP_NAME} \
                         --network cloud_devops_app_devops-net \
                         -e KAFKA_BROKER=${KAFKA_BROKER} \
-
                         ${APP_IMAGE}
                 """
             }
