@@ -2,17 +2,16 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME    = "flask-api"
-        APP_IMAGE   = "${APP_NAME}:${BUILD_NUMBER}"
+        APP_NAME    = "flask-app"  // Remplacer "flask-api" par "flask-app"
+        APP_IMAGE   = "flask-api:${BUILD_NUMBER}"
         KAFKA_TOPIC = "ci-events"
-        // KAFKA_BROKER défini via Jenkins ou par défaut pour le réseau interne
-        KAFKA_BROKER = "${env.KAFKA_BROKER ?: 'kafka:9092'}"
+        KAFKA_BROKER = "kafka:9092"
     }
 
     stages {
 
         // ─────────────────────────────────────────
-        // STAGE 1 — BUILD
+        // STAGE 1 - BUILD
         // ─────────────────────────────────────────
         stage('Build') {
             steps {
@@ -30,26 +29,40 @@ pipeline {
         }
 
         // ─────────────────────────────────────────
-        // STAGE 2 — TEST
+        // STAGE 2 - TEST
         // ─────────────────────────────────────────
         stage('Test') {
             steps {
                 echo "=== TEST : exécution des tests automatiques ==="
                 sh """
-                    # Crée le dossier d'accueil sur l'hôte Jenkins
-                    mkdir -p test-results
+                    # 1. On désactive temporairement l'arrêt immédiat du script en cas d'erreur (+e)
+                    set +e
                     
-                    # Lance le conteneur en lui montant ce dossier et en demandant un fichier XML
-                    docker run --rm \
-                        --name ${APP_NAME}-test-${BUILD_NUMBER} \
-                        -v "${WORKSPACE}/test-results:/app/test-results" \
+                    # 2. On lance le conteneur SANS --rm pour pouvoir copier son contenu après l'exécution
+                    docker run --name ${APP_NAME}-test-${BUILD_NUMBER} \
                         ${APP_IMAGE} \
-                        python -m pytest tests/ -v --tb=short --junitxml=test-results/results.xml
+                        python -m pytest tests/ -v --tb=short --junitxml=results.xml
+                    
+                    # 3. On sauvegarde le code de retour de pytest (0 = succès, >0 = échec)
+                    TEST_EXIT_CODE=\$?
+                    
+                    # 4. On réactive l'arrêt immédiat du script en cas d'erreur (-e)
+                    set -e
+                    
+                    # 5. On extrait le fichier XML généré à l'intérieur du conteneur vers Jenkins
+                    mkdir -p test-results
+                    docker cp ${APP_NAME}-test-${BUILD_NUMBER}:/app/results.xml test-results/results.xml
+                    
+                    # 6. On nettoie le conteneur de test qui a fini de tourner
+                    docker rm ${APP_NAME}-test-${BUILD_NUMBER}
+                    
+                    # 7. On transmet le vrai résultat des tests à Jenkins
+                    exit \$TEST_EXIT_CODE
                 """
             }
             post {
                 always {
-                    // Jenkins va maintenant pouvoir lire le fichier extrait sur l'hôte
+                    // Cette fois, le fichier est bien présent localement pour Jenkins
                     junit allowEmptyResults: true, testResults: 'test-results/results.xml'
                 }
                 success {
@@ -62,7 +75,7 @@ pipeline {
         }
 
         // ─────────────────────────────────────────
-        // STAGE 3 — DEPLOY
+        // STAGE 3 - DEPLOY
         // ─────────────────────────────────────────
         stage('Deploy') {
             steps {
@@ -97,10 +110,10 @@ pipeline {
     // ─────────────────────────────────────────
     post {
         success {
-            echo "Pipeline terminé avec succès — build #${BUILD_NUMBER}"
+            echo "Pipeline terminé avec succès - build #${BUILD_NUMBER}"
         }
         failure {
-            echo "Pipeline échoué — voir les logs ci-dessus"
+            echo "Pipeline échoué - voir les logs ci-dessus"
         }
         always {
             // Nettoyage des images intermédiaires pour économiser de l'espace
@@ -110,7 +123,7 @@ pipeline {
 }
 
 // ─────────────────────────────────────────
-// FONCTION UTILITAIRE — envoi événement Kafka
+// FONCTION UTILITAIRE - envoi événement Kafka
 // ─────────────────────────────────────────
 def sendKafkaEvent(String stage, String status) {
     def payload = """
