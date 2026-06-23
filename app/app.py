@@ -36,15 +36,19 @@ def get_producer():
 # ─── Intercepteur de Métriques (Middleware) ───────────────────────────────────
 @app.after_request
 def log_request_metrics(response):
-    """Enregistre automatiquement TOUTES les requêtes et leur code HTTP (200, 404, 405...)."""
-    # Évite de polluer les métriques avec les propres grattages de Prometheus
     if request.path != "/metrics":
         REQUEST_COUNT.labels(
-            method=request.method, 
-            endpoint=request.path, 
+            method=request.method,
+            endpoint=request.path,
             status_code=str(response.status_code)
         ).inc()
+        # Ajouter ceci — latence sur toutes les routes
+        REQUEST_LATENCY.observe(time.time() - getattr(request, '_start_time', time.time()))
     return response
+
+@app.before_request
+def start_timer():
+    request._start_time = time.time()
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
