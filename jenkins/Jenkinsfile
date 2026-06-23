@@ -79,9 +79,20 @@ pipeline {
         // ─────────────────────────────────────────
         stage('Deploy') {
             steps {
-                echo "=== DEPLOY : redémarrage du service via docker-compose ==="
-                // Remplacez 'docker compose' (plugin) par 'docker-compose' (binaire autonome)
-                sh "docker-compose up -d --build flask-app"
+                echo "=== DEPLOY : Déploiement via Docker standard ==="
+                script {
+                    // 1. Récupérer dynamiquement le nom du réseau de Kafka
+                    def kafkaNetwork = sh(script: "docker inspect kafka -f '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}}{{end}}'", returnStdout: true).trim()
+                    
+                    echo "Réseau détecté pour Kafka : ${kafkaNetwork}"
+                    
+                    // 2. Arrêter et supprimer l'ancien conteneur de l'application s'il existe
+                    sh "docker stop flask-app || true"
+                    sh "docker rm flask-app || true"
+                    
+                    // 3. Lancer le nouveau conteneur sur le même réseau
+                    sh "docker run -d --name flask-app -p 5000:5000 --network ${kafkaNetwork} flask-api:${env.BUILD_NUMBER}"
+                }
             }
             post {
                 success {
