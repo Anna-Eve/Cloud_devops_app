@@ -80,9 +80,8 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo "=== DEPLOY : redémarrage du service via docker-compose ==="
-                sh """
-                    docker compose up -d --build flask-app
-                """
+                // Remplacez 'docker compose' (plugin) par 'docker-compose' (binaire autonome)
+                sh "docker-compose up -d --build flask-app"
             }
             post {
                 success {
