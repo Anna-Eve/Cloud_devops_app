@@ -81,7 +81,7 @@ pipeline {
             steps {
                 echo "=== DEPLOY : redémarrage du service via docker-compose ==="
                 sh """
-                    docker compose up -d --build flask-app
+                    docker compose up d --build flask-app
                 """
             }
             post {
