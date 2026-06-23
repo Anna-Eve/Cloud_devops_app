@@ -81,17 +81,7 @@ pipeline {
             steps {
                 echo "=== DEPLOY : redémarrage du service via docker-compose ==="
                 sh """
-                    # Arrête l'ancien conteneur de l'app s'il tourne
-                    docker stop ${APP_NAME} 2>/dev/null || true
-                    docker rm   ${APP_NAME} 2>/dev/null || true
-
-                    # Relance avec la nouvelle image en publiant le port 5000
-                    docker run -d \
-                        --name ${APP_NAME} \
-                        --network cloud_devops_app_devops-net \
-                        -e KAFKA_BROKER=${KAFKA_BROKER} \
-                        -p 5000:5000 \
-                        ${APP_IMAGE}
+                    docker compose up -d --build flask-app
                 """
             }
             post {
