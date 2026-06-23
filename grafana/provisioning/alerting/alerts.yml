@@ -1,0 +1,179 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: DevOps Alerts
+    folder: DevOps Project
+    interval: 1m
+    rules:
+
+      #  CPU élevé 
+      - uid: alert-cpu-high
+        title: "CPU Usage élevé (> 80%)"
+        condition: C
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            queryType: ''
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [80], type: gt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+                  type: query
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          summary: "CPU usage dépasse 80%"
+          description: "Le CPU est à {{ $values.A.Value | printf \"%.1f\" }}% depuis plus de 2 minutes."
+        labels:
+          severity: warning
+          team: platform
+
+      #  Mémoire élevée 
+      - uid: alert-memory-high
+        title: "Mémoire Usage élevée (> 85%)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [85], type: gt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          summary: "Mémoire RAM dépasse 85%"
+          description: "La mémoire est à {{ $values.A.Value | printf \"%.1f\" }}%."
+        labels:
+          severity: warning
+          team: platform
+
+      #  Service DOWN 
+      - uid: alert-service-down
+        title: "Service DOWN"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 120, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: up
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [1], type: lt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 30s
+        annotations:
+          summary: "Service {{ $labels.job }} est DOWN"
+          description: "Le service {{ $labels.job }} ne répond plus à Prometheus."
+        labels:
+          severity: critical
+          team: platform
+
+      #  Flask App ne répond plus 
+      - uid: alert-flask-down
+        title: "Flask App inaccessible"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 120, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: up{job="flask-app"}
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [1], type: lt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 30s
+        annotations:
+          summary: "L'application Flask est DOWN"
+          description: "Prometheus ne peut plus scraper flask-app:5000."
+        labels:
+          severity: critical
+          team: platform
+
+      #  Latence élevée Flask 
+      - uid: alert-flask-latency
+        title: "Latence Flask élevée (p95 > 1s)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: histogram_quantile(0.95, rate(app_request_latency_seconds_bucket[1m]))
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [1], type: gt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "Latence p95 Flask dépasse 1 seconde"
+          description: "La latence au 95e percentile est de {{ $values.A.Value | printf \"%.2f\" }}s."
+        labels:
+          severity: warning
+          team: platform
